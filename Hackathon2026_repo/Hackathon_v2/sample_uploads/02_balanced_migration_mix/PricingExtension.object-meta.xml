@@ -1,0 +1,5 @@
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+  <label>Pricing Extension</label>
+  <fields><fullName>Pricing_Segment__c</fullName><type>Picklist</type></fields>
+  <fields><fullName>Support_Level__c</fullName><type>Text</type><length>50</length></fields>
+</CustomObject>

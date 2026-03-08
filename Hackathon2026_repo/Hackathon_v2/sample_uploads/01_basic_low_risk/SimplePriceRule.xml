@@ -1,0 +1,8 @@
+<PricingRule xmlns="http://soap.sforce.com/2006/04/metadata">
+  <conditions>
+    <field>SBQQ__Quantity__c</field>
+  </conditions>
+  <priceActions>
+    <targetField>SBQQ__NetPrice__c</targetField>
+  </priceActions>
+</PricingRule>

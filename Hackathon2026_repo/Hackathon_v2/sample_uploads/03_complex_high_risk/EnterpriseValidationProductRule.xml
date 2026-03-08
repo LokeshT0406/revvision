@@ -1,0 +1,7 @@
+<ProductRule xmlns="http://soap.sforce.com/2006/04/metadata">
+  <productRuleType>Validation</productRuleType>
+  <errorConditionMet>true</errorConditionMet>
+  <conditions><testField>SBQQ__BundledQuantity__c</testField></conditions>
+  <conditions><testField>SBQQ__RequiredBy__c</testField></conditions>
+  <conditions><testField>SBQQ__OptionLevel__c</testField></conditions>
+</ProductRule>

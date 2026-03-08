@@ -1,0 +1,9 @@
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+  <processType>Flow</processType>
+  <decisions>
+    <name>HasDiscount</name>
+  </decisions>
+  <recordLookups>
+    <name>FindAccount</name>
+  </recordLookups>
+</Flow>

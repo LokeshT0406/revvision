@@ -1,0 +1,11 @@
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+  <processType>Flow</processType>
+  <decisions><name>CheckSegment</name></decisions>
+  <decisions><name>CheckTerm</name></decisions>
+  <loops><name>LoopQuoteLines</name></loops>
+  <actionCalls><name>InvokePricingApex</name></actionCalls>
+  <actionCalls><name>InvokeApprovalApex</name></actionCalls>
+  <recordLookups><name>GetSubscription</name></recordLookups>
+  <recordUpdates><name>UpdateQuoteLine</name></recordUpdates>
+  <description>SBQQ__Quote__c and SBQQ__QuoteLine__c orchestration</description>
+</Flow>

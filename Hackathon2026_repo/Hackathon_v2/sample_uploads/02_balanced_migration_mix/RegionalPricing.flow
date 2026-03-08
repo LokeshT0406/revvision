@@ -1,0 +1,9 @@
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+  <processType>Flow</processType>
+  <decisions><name>CheckRegion</name></decisions>
+  <decisions><name>CheckSegment</name></decisions>
+  <actionCalls><name>CallPricingAction</name></actionCalls>
+  <recordLookups><name>GetQuoteLines</name></recordLookups>
+  <recordUpdates><name>UpdateQuoteLine</name></recordUpdates>
+  <description>SBQQ__Quote__c flow for pricing adjustment</description>
+</Flow>

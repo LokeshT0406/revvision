@@ -1,0 +1,12 @@
+﻿{
+  "packageDirectories": [
+    {
+      "path": "salesforce/force-app",
+      "default": true
+    }
+  ],
+  "name": "revvision-salesforce",
+  "namespace": "",
+  "sfdcLoginUrl": "https://login.salesforce.com",
+  "sourceApiVersion": "62.0"
+}

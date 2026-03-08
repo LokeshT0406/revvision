@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "revvision-pro"
+version = "0.1.0"
+description = "CPQ to Revenue Cloud Advanced readiness assessor"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "streamlit>=1.33.0",
+  "pandas>=2.2.0",
+  "plotly>=5.20.0",
+  "openai>=1.40.0"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
