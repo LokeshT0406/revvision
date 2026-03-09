@@ -7,6 +7,20 @@ const RISK_PRESETS = {
     Strict: { low: 150, moderate: 350, high: 600 }
 };
 
+const TYPE_LABELS = {
+    qcp: 'QCP Script',
+    apex_trigger: 'Apex Trigger',
+    apex_class: 'Apex Class',
+    flow: 'Flow',
+    product_rule: 'Product Rule',
+    price_rule: 'Price Rule',
+    lookup_table: 'Lookup Table',
+    summary_variable: 'Summary Variable',
+    object_metadata: 'Object Metadata',
+    xml_generic: 'XML Generic',
+    unknown: 'Unknown'
+};
+
 export default class RevvisionWorkbench extends LightningElement {
     @track riskProfile = 'Balanced';
     @track lowThreshold = 250;
@@ -16,10 +30,13 @@ export default class RevvisionWorkbench extends LightningElement {
     @track result;
     @track selectedFileNames = [];
     @track fileStatus = 'No files selected.';
+    @track selectedArtifactName;
+    @track blueprintMode = 'portfolio';
+    @track blueprintArtifactName;
 
     columns = [
         { label: 'File', fieldName: 'fileName' },
-        { label: 'Type', fieldName: 'typeKey' },
+        { label: 'Type', fieldName: 'typeLabel' },
         { label: 'Score', fieldName: 'score', type: 'number' },
         { label: 'Risk', fieldName: 'risk' },
         { label: 'Est. Weeks', fieldName: 'estWeeks', type: 'number' }
@@ -53,11 +70,38 @@ export default class RevvisionWorkbench extends LightningElement {
         { label: 'Artifacts', fieldName: 'artifacts', type: 'number' }
     ];
 
+    artifactSummaryColumns = [
+        { label: 'File', fieldName: 'fileName' },
+        { label: 'Type', fieldName: 'typeLabel' },
+        { label: 'Risk', fieldName: 'risk' },
+        { label: 'Score', fieldName: 'score', type: 'number' },
+        { label: 'Est. Weeks', fieldName: 'estWeeks', type: 'number' },
+        { label: 'Hardcoded IDs', fieldName: 'hardcodedIds', type: 'number' },
+        { label: 'SOQL Hits', fieldName: 'soqlHits', type: 'number' }
+    ];
+
+    riskDistributionColumns = [
+        { label: 'Risk', fieldName: 'risk' },
+        { label: 'Count', fieldName: 'count', type: 'number' }
+    ];
+
+    typeBreakdownColumns = [
+        { label: 'Artifact Type', fieldName: 'typeLabel' },
+        { label: 'Count', fieldName: 'count', type: 'number' }
+    ];
+
     get riskProfileOptions() {
         return [
             { label: 'Balanced', value: 'Balanced' },
             { label: 'Strict', value: 'Strict' },
             { label: 'Custom', value: 'Custom' }
+        ];
+    }
+
+    get blueprintModeOptions() {
+        return [
+            { label: 'Portfolio (all artifacts)', value: 'portfolio' },
+            { label: 'Single artifact', value: 'single' }
         ];
     }
 
@@ -75,6 +119,35 @@ export default class RevvisionWorkbench extends LightningElement {
 
     get hasSelectedFiles() {
         return this.selectedFileNames && this.selectedFileNames.length > 0;
+    }
+
+    get artifacts() {
+        const rows = this.result?.artifacts || [];
+        return rows.map((row) => ({ ...row, typeLabel: this.typeLabel(row.typeKey) }));
+    }
+
+    get artifactOptions() {
+        return this.artifacts.map((a) => ({ label: a.fileName, value: a.fileName }));
+    }
+
+    get hasArtifacts() {
+        return this.artifacts.length > 0;
+    }
+
+    get selectedArtifact() {
+        if (!this.hasArtifacts) {
+            return null;
+        }
+        const requested = this.selectedArtifactName || this.artifacts[0].fileName;
+        return this.artifacts.find((a) => a.fileName === requested) || this.artifacts[0];
+    }
+
+    get selectedArtifactActions() {
+        const row = this.selectedArtifact;
+        if (!row) {
+            return [];
+        }
+        return this.actionItemsFor(row);
     }
 
     get totalConditions() {
@@ -114,8 +187,131 @@ export default class RevvisionWorkbench extends LightningElement {
         return `${hc}/${total} files`;
     }
 
+    get qcpFileCount() {
+        return this.artifacts.filter((a) => a.typeKey === 'qcp').length;
+    }
+
+    get estimatedEffortWeeks() {
+        return this.artifacts.reduce((acc, row) => acc + (Number(row.estWeeks) || 0), 0).toFixed(1);
+    }
+
+    get roi() {
+        const artifacts = this.artifacts.length;
+        const manualHours = artifacts * 1.5;
+        const aiHours = artifacts * 0.1;
+        const hoursSaved = manualHours - aiHours;
+        const costSaved = hoursSaved * 75;
+        const efficiencyGainPct = manualHours ? Math.round((hoursSaved / manualHours) * 100) : 0;
+
+        return {
+            artifacts,
+            manualHours: manualHours.toFixed(1),
+            aiHours: aiHours.toFixed(1),
+            hoursSaved: hoursSaved.toFixed(1),
+            costSaved: Math.round(costSaved),
+            efficiencyGainPct
+        };
+    }
+
+    get scoreColumnsRows() {
+        return this.artifacts
+            .slice()
+            .sort((a, b) => (b.score || 0) - (a.score || 0));
+    }
+
     get riskScoreNote() {
-        return `Per-file risk score is calculated from file type weight, conditions, actions, lookups, SOQL hits, hardcoded IDs, SBQQ references, and QCP hooks. Score is capped at 1000 per file.`;
+        return 'Per-file risk score is calculated from file type weight, conditions, actions, lookups, SOQL hits, hardcoded IDs, SBQQ references, and QCP hooks. Score is capped at 1000 per file.';
+    }
+
+    get riskDistributionRows() {
+        const counts = { CRITICAL: 0, HIGH: 0, MODERATE: 0, LOW: 0 };
+        this.artifacts.forEach((row) => {
+            const key = String(row.risk || 'LOW').toUpperCase();
+            if (counts[key] !== undefined) counts[key] += 1;
+        });
+        return Object.keys(counts).map((risk) => ({ risk, count: counts[risk] }));
+    }
+
+    get typeBreakdownRows() {
+        const map = {};
+        this.artifacts.forEach((row) => {
+            const typeLabel = this.typeLabel(row.typeKey);
+            map[typeLabel] = (map[typeLabel] || 0) + 1;
+        });
+        return Object.keys(map)
+            .sort()
+            .map((typeLabel) => ({ typeLabel, count: map[typeLabel] }));
+    }
+
+    get roadmapRows() {
+        const phase1 = this.artifacts.filter((a) => a.risk === 'LOW' || a.risk === 'MODERATE');
+        const phase2 = this.artifacts.filter((a) => a.risk === 'HIGH');
+        const phase3 = this.artifacts.filter((a) => a.risk === 'CRITICAL');
+
+        const rows = [];
+        if (phase1.length) {
+            rows.push(this.buildRoadmapPhaseRow(1, 'Quick Wins', phase1, 'Start with low/moderate complexity artifacts.'));
+        }
+        if (phase2.length) {
+            rows.push(this.buildRoadmapPhaseRow(2, 'Core Migration', phase2, 'Migrate high-risk core business logic.'));
+        }
+        if (phase3.length) {
+            rows.push(this.buildRoadmapPhaseRow(3, 'Complex Assets', phase3, 'Architect-led execution for critical customizations.'));
+        }
+        return rows;
+    }
+
+    get roadmapColumns() {
+        return [
+            { label: 'Phase', fieldName: 'phase' },
+            { label: 'Title', fieldName: 'title' },
+            { label: 'Artifacts', fieldName: 'count', type: 'number' },
+            { label: 'Est. Weeks', fieldName: 'weeks', type: 'number' },
+            { label: 'Description', fieldName: 'description' }
+        ];
+    }
+
+    get isSingleBlueprintMode() {
+        return this.blueprintMode === 'single';
+    }
+
+    get selectedBlueprintArtifact() {
+        const rows = this.artifacts;
+        if (!rows.length) {
+            return null;
+        }
+        const requested = this.blueprintArtifactName || rows[0].fileName;
+        return rows.find((a) => a.fileName === requested) || rows[0];
+    }
+
+    get blueprintHtml() {
+        if (!this.result) {
+            return '';
+        }
+
+        if (this.isSingleBlueprintMode) {
+            const row = this.selectedBlueprintArtifact;
+            if (!row) {
+                return '';
+            }
+            const single = this.buildSingleBlueprintText(row);
+            return this.toBlueprintHtml(single);
+        }
+
+        if (this.result.blueprintText) {
+            return this.toBlueprintHtml(this.result.blueprintText);
+        }
+        return '';
+    }
+
+    get mappingBullets() {
+        return this.result?.mappingBullets || [];
+    }
+
+    get artifactSummaryRows() {
+        return this.artifacts
+            .slice()
+            .sort((a, b) => (b.score || 0) - (a.score || 0));
     }
 
     openFilePicker() {
@@ -147,6 +343,18 @@ export default class RevvisionWorkbench extends LightningElement {
 
     handleHighChange(event) {
         this.highThreshold = Number(event.detail.value);
+    }
+
+    handleArtifactChange(event) {
+        this.selectedArtifactName = event.detail.value;
+    }
+
+    handleBlueprintModeChange(event) {
+        this.blueprintMode = event.detail.value;
+    }
+
+    handleBlueprintArtifactChange(event) {
+        this.blueprintArtifactName = event.detail.value;
     }
 
     async handleFilesSelected(event) {
@@ -203,10 +411,11 @@ export default class RevvisionWorkbench extends LightningElement {
             if (this.result && this.result.blueprintText) {
                 this.result = {
                     ...this.result,
-                    blueprintText: this.result.blueprintText.replace(/\\\\n/g, '\n')
+                    blueprintText: this.result.blueprintText.replace(/\\n/g, '\n')
                 };
-                this.result.blueprintHtml = this.toBlueprintHtml(this.result.blueprintText);
             }
+            this.selectedArtifactName = this.artifacts.length ? this.artifacts[0].fileName : null;
+            this.blueprintArtifactName = this.artifacts.length ? this.artifacts[0].fileName : null;
             this.notify('Assessment complete', `Analyzed ${this.result.totalFiles} artifacts.`, 'success');
         } catch (e) {
             this.notify('Assessment failed', this.reduceError(e), 'error');
@@ -221,9 +430,7 @@ export default class RevvisionWorkbench extends LightningElement {
     }
 
     notify(title, message, variant) {
-        this.dispatchEvent(
-            new ShowToastEvent({ title, message, variant })
-        );
+        this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
     }
 
     sumField(fieldName) {
@@ -231,6 +438,56 @@ export default class RevvisionWorkbench extends LightningElement {
             return 0;
         }
         return this.result.artifacts.reduce((acc, row) => acc + (Number(row[fieldName]) || 0), 0);
+    }
+
+    typeLabel(typeKey) {
+        return TYPE_LABELS[typeKey] || 'Unknown';
+    }
+
+    buildRoadmapPhaseRow(phase, title, rows, description) {
+        const weeks = rows.reduce((acc, row) => acc + (Number(row.estWeeks) || 0), 0);
+        return {
+            phase: `Phase ${phase}`,
+            title,
+            count: rows.length,
+            weeks: Number(weeks.toFixed(1)),
+            description
+        };
+    }
+
+    buildSingleBlueprintText(row) {
+        const lines = [];
+        lines.push(`# Migration Blueprint: ${row.fileName}`);
+        lines.push(`Type: ${this.typeLabel(row.typeKey)} | Risk: ${row.risk} | Score: ${row.score}`);
+        lines.push('');
+        lines.push('## Migration actions');
+        this.actionItemsFor(row).forEach((item) => lines.push(`- ${item}`));
+        lines.push('');
+        lines.push('## Validation checks');
+        lines.push('- Compare CPQ and RCA pricing output for baseline quote scenarios.');
+        lines.push('- Validate amendment and renewal parity for affected products.');
+        lines.push('- Confirm no hardcoded IDs or unsupported QCP runtime dependencies remain.');
+        return lines.join('\n');
+    }
+
+    actionItemsFor(row) {
+        const actions = [];
+        if ((row.hardcodedIds || 0) > 0) {
+            actions.push('Replace hardcoded Salesforce IDs with metadata/config references.');
+        }
+        if ((row.soqlHits || 0) > 0) {
+            actions.push('Refactor SOQL-heavy logic into service classes.');
+        }
+        if (row.typeKey === 'qcp' || (row.qcpHooks || 0) > 0) {
+            actions.push('Rebuild QCP logic as RCA pricing procedure + Apex actions.');
+        }
+        if ((row.sbqqRefs || 0) > 0) {
+            actions.push('Replace SBQQ references with RCA object model mapping.');
+        }
+        if (!actions.length) {
+            actions.push('No critical action items detected.');
+        }
+        return actions;
     }
 
     toBlueprintHtml(text) {

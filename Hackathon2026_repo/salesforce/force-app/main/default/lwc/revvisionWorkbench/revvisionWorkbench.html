@@ -65,40 +65,88 @@
                 <lightning-tabset variant="scoped">
                     <lightning-tab label="Dashboard">
                         <lightning-layout multiple-rows>
-                            <lightning-layout-item size="12" medium-device-size="3" class="slds-p-around_x-small">
+                            <lightning-layout-item size="12" medium-device-size="2" class="slds-p-around_x-small">
                                 <div class="metric">
-                                    <div class="metric-label">Total Files (Processed)</div>
+                                    <div class="metric-label">Files Uploaded</div>
                                     <div class="metric-value">{result.totalFiles}</div>
                                 </div>
                             </lightning-layout-item>
-                            <lightning-layout-item size="12" medium-device-size="3" class="slds-p-around_x-small">
+                            <lightning-layout-item size="12" medium-device-size="2" class="slds-p-around_x-small">
                                 <div class="metric">
                                     <div class="metric-label">Total Risk Score</div>
                                     <div class="metric-value">{result.totalScore}</div>
                                 </div>
                             </lightning-layout-item>
-                            <lightning-layout-item size="12" medium-device-size="3" class="slds-p-around_x-small">
+                            <lightning-layout-item size="12" medium-device-size="2" class="slds-p-around_x-small">
                                 <div class="metric">
                                     <div class="metric-label">Org Risk</div>
                                     <div class="metric-value">{result.orgRisk}</div>
+                                    <div class="metric-sub">{highCriticalSummary}</div>
                                 </div>
                             </lightning-layout-item>
-                            <lightning-layout-item size="12" medium-device-size="3" class="slds-p-around_x-small">
+                            <lightning-layout-item size="12" medium-device-size="2" class="slds-p-around_x-small">
                                 <div class="metric">
-                                    <div class="metric-label">Estimated Effort (Weeks)</div>
-                                    <div class="metric-value">{result.totalEstWeeks}</div>
+                                    <div class="metric-label">QCP Files</div>
+                                    <div class="metric-value">{qcpFileCount}</div>
+                                </div>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="12" medium-device-size="2" class="slds-p-around_x-small">
+                                <div class="metric">
+                                    <div class="metric-label">Est. Effort</div>
+                                    <div class="metric-value">{estimatedEffortWeeks}w</div>
+                                    <div class="metric-sub">total migration weeks</div>
+                                </div>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="12" medium-device-size="2" class="slds-p-around_x-small">
+                                <div class="metric">
+                                    <div class="metric-label">ROI</div>
+                                    <div class="metric-value">${roi.costSaved}</div>
+                                    <div class="metric-sub">{roi.efficiencyGainPct}% efficiency</div>
                                 </div>
                             </lightning-layout-item>
                         </lightning-layout>
-                        <div class="slds-m-top_small">
-                            <h3 class="slds-text-heading_small slds-m-bottom_x-small">Per-file Risk Score (0 to 1000)</h3>
+
+                        <div class="slds-m-top_medium">
+                            <h3 class="slds-text-heading_small slds-m-bottom_x-small">Risk Score Ranges (Per File: 0-1000)</h3>
                             <lightning-datatable
-                                key-field="fileName"
-                                data={result.artifacts}
-                                columns={scoreColumns}
+                                key-field="risk"
+                                data={result.riskRanges}
+                                columns={riskRangeColumns}
                                 hide-checkbox-column>
                             </lightning-datatable>
                         </div>
+
+                        <lightning-layout multiple-rows class="slds-m-top_medium">
+                            <lightning-layout-item size="12" medium-device-size="6" class="slds-p-right_small">
+                                <h3 class="slds-text-heading_small slds-m-bottom_x-small">Risk Distribution</h3>
+                                <lightning-datatable
+                                    key-field="risk"
+                                    data={riskDistributionRows}
+                                    columns={riskDistributionColumns}
+                                    hide-checkbox-column>
+                                </lightning-datatable>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="12" medium-device-size="6">
+                                <h3 class="slds-text-heading_small slds-m-bottom_x-small">Artifact Type Breakdown</h3>
+                                <lightning-datatable
+                                    key-field="typeLabel"
+                                    data={typeBreakdownRows}
+                                    columns={typeBreakdownColumns}
+                                    hide-checkbox-column>
+                                </lightning-datatable>
+                            </lightning-layout-item>
+                        </lightning-layout>
+
+                        <div class="slds-m-top_medium">
+                            <h3 class="slds-text-heading_small slds-m-bottom_x-small">Artifact Summary</h3>
+                            <lightning-datatable
+                                key-field="fileName"
+                                data={artifactSummaryRows}
+                                columns={artifactSummaryColumns}
+                                hide-checkbox-column>
+                            </lightning-datatable>
+                        </div>
+
                         <div class="slds-m-top_medium">
                             <h3 class="slds-text-heading_small slds-m-bottom_x-small">Risk Scoring Note</h3>
                             <div class="slds-text-body_regular">{riskScoreNote}</div>
@@ -109,11 +157,42 @@
                         <div class="slds-m-top_small">
                             <lightning-datatable
                                 key-field="fileName"
-                                data={result.artifacts}
+                                data={artifacts}
                                 columns={columns}
                                 hide-checkbox-column>
                             </lightning-datatable>
                         </div>
+
+                        <template if:true={hasArtifacts}>
+                            <div class="slds-m-top_medium">
+                                <lightning-combobox
+                                    label="Select artifact to inspect"
+                                    value={selectedArtifactName}
+                                    options={artifactOptions}
+                                    onchange={handleArtifactChange}>
+                                </lightning-combobox>
+                            </div>
+
+                            <div class="slds-m-top_small metric">
+                                <div class="metric-label">Selected Artifact</div>
+                                <div class="slds-text-title_bold">{selectedArtifact.fileName}</div>
+                                <div class="slds-m-top_x-small">
+                                    Type: {selectedArtifact.typeLabel} | Risk: {selectedArtifact.risk} | Score: {selectedArtifact.score} | Effort: {selectedArtifact.estWeeks} weeks
+                                </div>
+                                <div class="slds-m-top_x-small">
+                                    Hardcoded IDs: {selectedArtifact.hardcodedIds} | SOQL Hits: {selectedArtifact.soqlHits} | SBQQ Refs: {selectedArtifact.sbqqRefs} | QCP Hooks: {selectedArtifact.qcpHooks}
+                                </div>
+                            </div>
+
+                            <div class="slds-m-top_medium">
+                                <h3 class="slds-text-heading_small slds-m-bottom_x-small">Migration Action Items</h3>
+                                <ul class="slds-list_dotted slds-p-left_large">
+                                    <template for:each={selectedArtifactActions} for:item="actionItem">
+                                        <li key={actionItem}>{actionItem}</li>
+                                    </template>
+                                </ul>
+                            </div>
+                        </template>
                     </lightning-tab>
 
                     <lightning-tab label="Parameters">
@@ -158,7 +237,7 @@
                         <div class="slds-m-top_small">
                             <lightning-datatable
                                 key-field="fileName"
-                                data={result.artifacts}
+                                data={artifacts}
                                 columns={parameterColumns}
                                 hide-checkbox-column>
                             </lightning-datatable>
@@ -246,29 +325,51 @@
 
                     <lightning-tab label="Roadmap">
                         <div class="slds-m-top_small">
-                            <template if:true={result.roadmap.length}>
-                                <ul class="slds-list_dotted slds-p-left_large">
-                                    <template for:each={result.roadmap} for:item="step">
-                                        <li key={step}>{step}</li>
-                                    </template>
-                                </ul>
-                            </template>
+                            <lightning-datatable
+                                key-field="phase"
+                                data={roadmapRows}
+                                columns={roadmapColumns}
+                                hide-checkbox-column>
+                            </lightning-datatable>
                         </div>
                     </lightning-tab>
 
                     <lightning-tab label="Blueprint">
                         <div class="slds-m-top_small">
                             <h3 class="slds-text-heading_small slds-m-bottom_x-small">SBQQ to RCA Mapping (In Scope)</h3>
-                            <template if:true={result.mappingBullets.length}>
+                            <template if:true={mappingBullets.length}>
                                 <ul class="slds-list_dotted slds-p-left_large">
-                                    <template for:each={result.mappingBullets} for:item="m">
+                                    <template for:each={mappingBullets} for:item="m">
                                         <li key={m}>{m}</li>
                                     </template>
                                 </ul>
                             </template>
+
+                            <div class="slds-m-top_medium">
+                                <lightning-radio-group
+                                    name="blueprintMode"
+                                    label="Blueprint mode"
+                                    options={blueprintModeOptions}
+                                    value={blueprintMode}
+                                    type="button"
+                                    onchange={handleBlueprintModeChange}>
+                                </lightning-radio-group>
+                            </div>
+
+                            <template if:true={isSingleBlueprintMode}>
+                                <div class="slds-m-top_small">
+                                    <lightning-combobox
+                                        label="Select artifact"
+                                        value={blueprintArtifactName}
+                                        options={artifactOptions}
+                                        onchange={handleBlueprintArtifactChange}>
+                                    </lightning-combobox>
+                                </div>
+                            </template>
+
                             <div class="slds-m-top_medium">
                                 <h3 class="slds-text-heading_small slds-m-bottom_x-small">Detailed Blueprint</h3>
-                                <lightning-formatted-rich-text value={result.blueprintHtml}></lightning-formatted-rich-text>
+                                <lightning-formatted-rich-text value={blueprintHtml}></lightning-formatted-rich-text>
                             </div>
                         </div>
                     </lightning-tab>
